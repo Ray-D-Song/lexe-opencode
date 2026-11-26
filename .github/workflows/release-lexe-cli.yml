@@ -7,7 +7,7 @@ on:
       lexe_version:
         description: "Published Lexe compiler/runtime version"
         required: true
-        default: "0.1.4"
+        default: "0.1.5"
         type: string
 
 concurrency:
@@ -101,12 +101,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # glibc builds: the OpenCode CLI loads native addons (node-pty, @parcel/watcher, ...),
+          # which the static musl Lexe build cannot dlopen.
           - target: linux-x64
             runner: ubuntu-24.04
-            asset: lexe-linux-x64
+            asset: lexe-linux-x64-gnu
           - target: linux-arm64
             runner: ubuntu-24.04-arm
-            asset: lexe-linux-arm64
+            asset: lexe-linux-arm64-gnu
           - target: darwin-arm64
             runner: macos-15
             asset: lexe-macos-arm64
