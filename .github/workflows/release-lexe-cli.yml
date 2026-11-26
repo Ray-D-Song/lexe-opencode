@@ -191,7 +191,7 @@ jobs:
           for target in linux-x64 linux-arm64 darwin-arm64 windows-x64 windows-arm64; do
             suffix=""
             [[ "$target" == windows-* ]] && suffix=".exe"
-            source="$RUNNER_TEMP/cli-artifacts/lexe-cli-$target/cli-lexe-$target/bin/opencode$suffix"
+            source="$RUNNER_TEMP/cli-artifacts/lexe-cli-$target/bin/opencode$suffix"
             test -s "$source"
             cp "$source" "$RUNNER_TEMP/release/opencode-$target$suffix"
             [[ "$target" == windows-* ]] || chmod 755 "$RUNNER_TEMP/release/opencode-$target"
