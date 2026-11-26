@@ -159,7 +159,7 @@ jobs:
         working-directory: packages/cli
         env:
           OPENCODE_APP_ARCHIVE: ${{ runner.temp }}/app-archive/opencode-app-archive.bin
-        run: bun run script/build-lexe.ts --skip-install --outdir=dist/lexe
+        run: bun run script/build-lexe.ts --outdir=dist/lexe
       - name: Upload standalone CLI
         uses: ./.github/release/upload
         with:
