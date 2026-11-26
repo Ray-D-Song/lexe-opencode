@@ -76,7 +76,6 @@ jobs:
     env:
       OPENCODE_CHANNEL: lexe
       OPENCODE_VERSION: ${{ needs.plan.outputs.version }}
-      OPENCODE_APP_ARCHIVE: ${{ runner.temp }}/app-archive/opencode-app-archive.bin
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -85,6 +84,8 @@ jobs:
         uses: ./.github/actions/setup-bun
       - name: Build web UI archive
         working-directory: packages/cli
+        env:
+          OPENCODE_APP_ARCHIVE: ${{ runner.temp }}/app-archive/opencode-app-archive.bin
         run: |
           mkdir -p "$(dirname "$OPENCODE_APP_ARCHIVE")"
           bun run script/build-lexe.ts --app-archive-only --skip-install
@@ -122,7 +123,6 @@ jobs:
       OPENCODE_CHANNEL: lexe
       OPENCODE_VERSION: ${{ needs.plan.outputs.version }}
       OPENCODE_TARGET: ${{ matrix.target }}
-      OPENCODE_APP_ARCHIVE: ${{ runner.temp }}/app-archive/opencode-app-archive.bin
       LEXE_ASSET: ${{ matrix.asset }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -154,6 +154,8 @@ jobs:
           path: ${{ runner.temp }}/app-archive
       - name: Build standalone CLI
         working-directory: packages/cli
+        env:
+          OPENCODE_APP_ARCHIVE: ${{ runner.temp }}/app-archive/opencode-app-archive.bin
         run: bun run script/build-lexe.ts --skip-install --outdir=dist/lexe
       - name: Upload standalone CLI
         uses: ./.github/release/upload
