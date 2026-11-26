@@ -37,7 +37,7 @@ fi
 install_dir=${OPENCODE_INSTALL_DIR:-"$HOME/.local/bin"}
 asset="opencode-darwin-$arch"
 base="https://github.com/$repo/releases/download/$tag"
-target="$install_dir/opencode"
+target="$install_dir/loc"
 
 mkdir -p "$install_dir"
 tmp=$(mktemp -d "$install_dir/.opencode.XXXXXX")
@@ -60,4 +60,4 @@ mkdir -p "$(dirname "$profile")"
 touch "$profile"
 grep -Fqx "$path_line" "$profile" || printf '%s\n' "$path_line" >> "$profile"
 
-echo "Installed OpenCode ($tag) to $target. Reopen your terminal or run: exec \"\$SHELL\" -l"
+echo "Installed lexe-opencode ($tag) to $target. Reopen your terminal or run: exec \"\$SHELL\" -l"

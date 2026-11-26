@@ -2,7 +2,7 @@
 set -eu
 
 install_dir=${OPENCODE_INSTALL_DIR:-"$HOME/.local/bin"}
-target="$install_dir/opencode"
+target="$install_dir/loc"
 
 if [ -e "$target" ] || [ -L "$target" ]; then
   rm -f "$target"

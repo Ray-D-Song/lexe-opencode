@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $installDir = if ($env:OPENCODE_INSTALL_DIR) { $env:OPENCODE_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\OpenCode' }
 $installDir = [IO.Path]::GetFullPath($installDir)
-$target = Join-Path $installDir 'opencode.exe'
+$target = Join-Path $installDir 'loc.exe'
 
 if (Test-Path -LiteralPath $target) {
   Remove-Item -Force -LiteralPath $target

@@ -29,7 +29,7 @@ $installDir = if ($env:OPENCODE_INSTALL_DIR) { $env:OPENCODE_INSTALL_DIR } else 
 $installDir = [IO.Path]::GetFullPath($installDir)
 $asset = "opencode-windows-$arch.exe"
 $base = "https://github.com/$repo/releases/download/$tag"
-$target = Join-Path $installDir 'opencode.exe'
+$target = Join-Path $installDir 'loc.exe'
 
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 $staged = Join-Path $installDir ".opencode.$PID.exe"
@@ -54,4 +54,4 @@ if (($env:Path -split ';' | Where-Object { $_ -eq $installDir }).Count -eq 0) {
   $env:Path = "$env:Path;$installDir"
 }
 
-Write-Host "Installed OpenCode ($tag) to $target. Open a new PowerShell session to use opencode."
+Write-Host "Installed lexe-opencode ($tag) to $target. Open a new PowerShell session to use loc."

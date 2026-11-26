@@ -2,6 +2,8 @@
 
 A fork of [OpenCode](https://github.com/anomalyco/opencode) compiled and distributed as standalone executables using [Lexe](https://github.com/Ray-D-Song/lexe).
 
+The CLI is installed as `loc` so it can coexist cleanly with upstream `opencode`.
+
 ## Install
 
 ```shell
@@ -15,6 +17,13 @@ curl -fsSL https://raw.githubusercontent.com/Ray-D-Song/lexe-opencode/dev/instal
 ```powershell
 # Windows PowerShell (x64 / arm64)
 irm https://raw.githubusercontent.com/Ray-D-Song/lexe-opencode/dev/install-windows.ps1 | iex
+```
+
+After installation, run:
+
+```shell
+loc --version
+loc
 ```
 
 ### Options
