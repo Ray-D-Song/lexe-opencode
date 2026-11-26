@@ -146,6 +146,9 @@ jobs:
           const actual = createHash("sha256").update(readFileSync(file)).digest("hex")
           if (actual !== expected) throw new Error(`Checksum mismatch for ${name}`)
           NODE
+          if [[ "$RUNNER_OS" != "Windows" ]]; then
+            chmod 755 "$RUNNER_TEMP/lexe/$LEXE_ASSET"
+          fi
           echo "LEXE_BIN=$RUNNER_TEMP/lexe/$LEXE_ASSET" >> "$GITHUB_ENV"
       - name: Download web UI archive
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
