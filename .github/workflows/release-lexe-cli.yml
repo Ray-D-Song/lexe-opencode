@@ -1,0 +1,245 @@
+name: release lexe cli
+run-name: "OpenCode CLI on Lexe v${{ inputs.lexe_version }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      lexe_version:
+        description: "Published Lexe compiler/runtime version"
+        required: true
+        default: "0.1.4"
+        type: string
+
+concurrency:
+  group: release-lexe-cli-${{ inputs.lexe_version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      lexe_version: ${{ steps.plan.outputs.lexe_version }}
+      opencode_version: ${{ steps.plan.outputs.opencode_version }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - id: plan
+        name: Plan release version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LEXE_VERSION: ${{ inputs.lexe_version }}
+        run: |
+          [[ "$GITHUB_REPOSITORY" == "Ray-D-Song/lexe-opencode" ]] || {
+            echo "Lexe CLI releases must run from Ray-D-Song/lexe-opencode" >&2
+            exit 1
+          }
+          [[ "$GITHUB_REF" == "refs/heads/dev" ]] || {
+            echo "Dispatch this workflow from the dev branch" >&2
+            exit 1
+          }
+          [[ "$LEXE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Lexe version must be a stable x.y.z version" >&2
+            exit 1
+          }
+          opencode_version=$(node -p "require('./packages/cli/package.json').version")
+          [[ "$opencode_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Unexpected OpenCode CLI version: $opencode_version" >&2
+            exit 1
+          }
+          version="${opencode_version}-lexe.${LEXE_VERSION}"
+          tag="lexe-opencode-v${version}"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "Release tag $tag already exists" >&2
+            exit 1
+          fi
+          {
+            echo "lexe_version=$LEXE_VERSION"
+            echo "opencode_version=$opencode_version"
+            echo "version=$version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+
+  app-archive:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      OPENCODE_CHANNEL: lexe
+      OPENCODE_VERSION: ${{ needs.plan.outputs.version }}
+      OPENCODE_APP_ARCHIVE: ${{ runner.temp }}/app-archive/opencode-app-archive.bin
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Set up Bun
+        uses: ./.github/actions/setup-bun
+      - name: Build web UI archive
+        working-directory: packages/cli
+        run: |
+          mkdir -p "$(dirname "$OPENCODE_APP_ARCHIVE")"
+          bun run script/build-lexe.ts --app-archive-only --skip-install
+      - name: Upload web UI archive
+        uses: ./.github/release/upload
+        with:
+          name: lexe-cli-app-archive
+          path: ${{ runner.temp }}/app-archive
+
+  build:
+    needs: [plan, app-archive]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-24.04
+            asset: lexe-linux-x64
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+            asset: lexe-linux-arm64
+          - target: darwin-arm64
+            runner: macos-15
+            asset: lexe-macos-arm64
+          - target: windows-x64
+            runner: windows-2022
+            asset: lexe-windows-x64.exe
+          - target: windows-arm64
+            runner: windows-11-arm
+            asset: lexe-windows-arm64.exe
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      LEXE_VERSION: ${{ needs.plan.outputs.lexe_version }}
+      OPENCODE_CHANNEL: lexe
+      OPENCODE_VERSION: ${{ needs.plan.outputs.version }}
+      OPENCODE_TARGET: ${{ matrix.target }}
+      OPENCODE_APP_ARCHIVE: ${{ runner.temp }}/app-archive/opencode-app-archive.bin
+      LEXE_ASSET: ${{ matrix.asset }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Set up Bun
+        uses: ./.github/actions/setup-bun
+      - name: Download and verify Lexe release binary
+        run: |
+          mkdir -p "$RUNNER_TEMP/lexe"
+          base="https://github.com/Ray-D-Song/lexe/releases/download/v${LEXE_VERSION}"
+          curl --fail --location --retry 3 --silent --show-error "$base/$LEXE_ASSET" -o "$RUNNER_TEMP/lexe/$LEXE_ASSET"
+          curl --fail --location --retry 3 --silent --show-error "$base/SHA256SUMS" -o "$RUNNER_TEMP/lexe/SHA256SUMS"
+          node - "$RUNNER_TEMP/lexe/$LEXE_ASSET" "$LEXE_ASSET" "$RUNNER_TEMP/lexe/SHA256SUMS" <<'NODE'
+          const { createHash } = require("node:crypto")
+          const { readFileSync } = require("node:fs")
+          const [file, name, sums] = process.argv.slice(2)
+          const row = readFileSync(sums, "utf8").split(/\r?\n/).find((line) => line.endsWith(`  ${name}`))
+          if (!row) throw new Error(`No SHA256SUMS entry for ${name}`)
+          const expected = row.split(/\s+/)[0]
+          const actual = createHash("sha256").update(readFileSync(file)).digest("hex")
+          if (actual !== expected) throw new Error(`Checksum mismatch for ${name}`)
+          NODE
+          echo "LEXE_BIN=$RUNNER_TEMP/lexe/$LEXE_ASSET" >> "$GITHUB_ENV"
+      - name: Download web UI archive
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: lexe-cli-app-archive
+          path: ${{ runner.temp }}/app-archive
+      - name: Build standalone CLI
+        working-directory: packages/cli
+        run: bun run script/build-lexe.ts --skip-install --outdir=dist/lexe
+      - name: Upload standalone CLI
+        uses: ./.github/release/upload
+        with:
+          name: lexe-cli-${{ matrix.target }}
+          path: packages/cli/dist/lexe/cli-lexe-${{ matrix.target }}
+
+  publish:
+    needs: [plan, app-archive, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      LEXE_VERSION: ${{ needs.plan.outputs.lexe_version }}
+      OPENCODE_BASE_VERSION: ${{ needs.plan.outputs.opencode_version }}
+      OPENCODE_VERSION: ${{ needs.plan.outputs.version }}
+      RELEASE_TAG: ${{ needs.plan.outputs.tag }}
+    steps:
+      - name: Download standalone CLI artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: lexe-cli-*
+          path: ${{ runner.temp }}/cli-artifacts
+      - name: Prepare release assets and notes
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          for target in linux-x64 linux-arm64 darwin-arm64 windows-x64 windows-arm64; do
+            suffix=""
+            [[ "$target" == windows-* ]] && suffix=".exe"
+            source="$RUNNER_TEMP/cli-artifacts/lexe-cli-$target/cli-lexe-$target/bin/opencode$suffix"
+            test -s "$source"
+            cp "$source" "$RUNNER_TEMP/release/opencode-$target$suffix"
+            [[ "$target" == windows-* ]] || chmod 755 "$RUNNER_TEMP/release/opencode-$target"
+          done
+          cat > "$RUNNER_TEMP/release/RELEASE_NOTES.md" <<EOF
+          ## OpenCode CLI ${OPENCODE_BASE_VERSION} built with Lexe ${LEXE_VERSION}
+
+          This release provides standalone OpenCode CLI executables compiled with Lexe. The binary embeds the web UI archive and target-specific native assets.
+
+          The Lexe build also allows up to 30 seconds for plugin startup and local server health checks, accommodating the runtime's cold-start time.
+
+          Download the executable for your OS and CPU architecture. Verify downloads with `SHA256SUMS`.
+
+          OpenCode source commit: ${GITHUB_SHA}
+          EOF
+          cd "$RUNNER_TEMP/release"
+          sha256sum opencode-* > SHA256SUMS
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          title="OpenCode CLI ${OPENCODE_BASE_VERSION} (Lexe ${LEXE_VERSION})"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)
+            [[ "$draft" == true ]] || {
+              echo "Release $RELEASE_TAG already exists and is published" >&2
+              exit 1
+            }
+          else
+            gh release create "$RELEASE_TAG" \
+              --draft \
+              --title "$title" \
+              --target "$GITHUB_SHA" \
+              --latest=false \
+              --notes-file "$RUNNER_TEMP/release/RELEASE_NOTES.md"
+          fi
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/release"/opencode-* "$RUNNER_TEMP/release/SHA256SUMS" --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --latest=false
+          gh release view "$RELEASE_TAG" --json isDraft,assets,url > "$RUNNER_TEMP/release/published.json"
+          node - "$RUNNER_TEMP/release/published.json" <<'NODE'
+          const { readFileSync } = require("node:fs")
+          const release = JSON.parse(readFileSync(process.argv[2], "utf8"))
+          const required = [
+            "opencode-linux-x64",
+            "opencode-linux-arm64",
+            "opencode-darwin-arm64",
+            "opencode-windows-x64.exe",
+            "opencode-windows-arm64.exe",
+            "SHA256SUMS",
+          ]
+          const actual = new Set(release.assets.map((asset) => asset.name))
+          const missing = required.filter((asset) => !actual.has(asset))
+          if (release.isDraft || missing.length) {
+            throw new Error(`Release verification failed: draft=${release.isDraft}, missing=${missing.join(", ")}`)
+          }
+          console.log(`Published ${release.url}`)
+          NODE
